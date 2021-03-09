@@ -1,0 +1,282 @@
+---
+title: "Week 7 Indepedent Analysis"
+author: "Tori Culler"
+date: "3/8/2021"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(readr)
+library(tidyr)
+library(rtweet)
+library(writexl)
+library(readxl)
+library(tidytext)
+library(textdata)
+library(ggplot2)
+library(textdata)
+library(scales)
+library(wordcloud2)
+
+# ********save credentials
+# app_name <- "YOUR KEY HERE"
+# api_key <- "YOUR KEY HERE"
+# api_secret_key <- "YOUR KEY HERE"
+# access_token <- "YOUR KEY HERE"
+# access_token_secret <- ""YOUR KEY HERE"
+# 
+# 
+
+# ********authenticate via web browser
+#token <- create_token(
+#   app = app_name,
+#   consumer_key = api_key,
+#   consumer_secret = api_secret_key,
+#   access_token = access_token,
+#   access_secret = access_token_secret)
+# 
+# # ********check to see if the token is loaded
+# get_token()
+# 
+# 
+# ******** perform keyword search to pull tweets
+# back2school_tweets <- search_tweets2(c('reopening schools NC',
+#                                 'school reopening NC',
+#                                 'reopening schools North Carolina',
+#                                 'school reopening North Carolina',
+#                                 'NC Senate Bill 37',
+#                                 'SB 37 NC'), 
+#                                 n=5000,
+#                                 include_rts = FALSE)
+# 
+# ******** write to spreadsheet for stable data
+# write_xlsx(back2school_tweets, "data/back2school_tweets.xlsx")
+
+# ******** save tweets as dataframe
+back2school_tweets <- read_xlsx("data/back2school_tweets.xlsx")
+
+# ******** tidy, tokenize
+back2school_text <-
+  back2school_tweets %>%
+  filter(lang == "en") %>%
+  select(screen_name, created_at, text)
+
+tweet_tokens <- 
+  back2school_text %>%
+  unnest_tokens(output = word, 
+                input = text, 
+                token = "tweets")
+
+tidy_tweets <-
+  tweet_tokens %>%
+  anti_join(stop_words, by = "word")
+
+# ******** get basic counts
+tweet_counts = count(tidy_tweets, word, sort = T)
+
+# ******** work with lexicons: afinn, bing, nrc, loughran
+afinn <- get_sentiments("afinn")
+sentiment_afinn <- inner_join(tidy_tweets, afinn, by = "word")
+summary_afinn <- sentiment_afinn %>% 
+  summarise(sentiment = sum(value)) %>% 
+  mutate(lexicon = "AFINN") %>%
+  relocate(lexicon)
+
+
+bing <- get_sentiments("bing")
+sentiment_bing <- inner_join(tidy_tweets, bing, by = "word")
+summary_bing <- sentiment_bing %>% 
+  count(sentiment, sort = TRUE) %>% 
+  spread(sentiment, n) %>%
+  mutate(sentiment = positive - negative) %>%
+  mutate(lexicon = "bing") %>%
+  relocate(lexicon)
+
+nrc <- get_sentiments("nrc")
+sentiment_nrc <- inner_join(tidy_tweets, nrc, by = "word")
+
+summary_nrc <- sentiment_nrc %>% 
+  count(sentiment, sort = TRUE) %>% 
+  filter(sentiment != "trust") %>%
+  filter(sentiment != "anticipation") %>%
+  filter(sentiment != "joy") %>%
+  filter(sentiment != "fear") %>%
+  filter(sentiment != "anger") %>%
+  filter(sentiment != "sadness") %>%
+  filter(sentiment != "disgust") %>%
+  filter(sentiment != "surprise") %>%
+  spread(sentiment, n) %>%
+  mutate(sentiment = positive - negative) %>%
+  mutate(lexicon = "nrc") %>%
+  relocate(lexicon)
+
+nrc_counts <- sentiment_nrc %>% 
+  count(sentiment, sort = TRUE)
+
+loughran <- get_sentiments("loughran")
+sentiment_loughran <- inner_join(tidy_tweets, loughran , by = "word")
+
+summary_loughran <- sentiment_loughran %>% 
+  count(sentiment, sort = TRUE) %>% 
+  filter(sentiment != "trust") %>%
+  filter(sentiment != "anticipation") %>%
+  filter(sentiment != "joy") %>%
+  filter(sentiment != "fear") %>%
+  filter(sentiment != "anger") %>%
+  filter(sentiment != "sadness") %>%
+  filter(sentiment != "disgust") %>%
+  filter(sentiment != "surprise") %>%
+  filter(sentiment != "constraining") %>%
+  filter(sentiment != "litigious") %>%
+  filter(sentiment != "uncertainty") %>%
+  spread(sentiment, n) %>%
+  mutate(sentiment = positive - negative) %>%
+  mutate(lexicon = "loughran") %>%
+  relocate(lexicon)
+
+loughran_counts <- sentiment_loughran %>% 
+  count(sentiment, sort = TRUE)
+
+```
+## What I did // Context
+
+* I performed a basic word count and sentiment analysis of tweets from Feb. 28th 2021 - Mar. 8th 2021 about schools potentially reopening for in-person instruction in North Carolina amidst the Covid-19 pandemic. 
+
+* This has been a topic of great controversy over the past week as the NC legislature has been working to push through Senate Bill 37 which would require all public schools in NC to begin offering in-person learning options. It was vetoed and attempts to override the veto have failed so far but are still ongoing.  
+* Nevertheless, the NC Board of Education passed a resolution strongly encouraging -- but not mandating -- that schools reopen by the end of March. Most are moving to do so. 
+
+## Purpose:
+
+To gauge what the overall tone is on Twitter with regards to how folks are feeling about schools potentially reopening. 
+
+My hypothesis was that the sentiment would skew rather negative, and this proved to be the case according to 3 of 4 lexicons used. 
+
+## Methods:
+
+I used the rtweet package to pull tweets that matched the following keyword searches
+
+* 'reopening schools NC'
+* 'school reopening NC'
+* 'reopening schools North Carolina'
+* 'school reopening North Carolina'
+* 'NC Senate Bill 37'
+* 'SB 37 NC'
+
+This returned a total of 378 tweets to work with. 
+
+## Tweets over time
+
+There were a lot of Tweets on Mar 02, just as Gov. Cooper vetoed SB 37, and then things slowly tapered off. 
+
+```{r, eval=T, echo=F}
+ts_plot(tidy_tweets, by = "days") +
+  labs(x = "tweets over time", y = NULL) 
+```
+
+## Most common words
+
+```{r, eval=T, echo=F}
+wordcloud2(tweet_counts,
+           color = ifelse(tweet_counts[, 2] > 100, 'black', 'gray'))
+```
+
+## Sentiment analysis
+
+Lexicons used
+
+* afinn (http://www2.imm.dtu.dk/pubdb/pubs/6010-full.html)
+* bing (https://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html)
+* nrc (https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm)
+* loughran (https://sraf.nd.edu/textual-analysis/resources/)
+
+## afinn + bing
+
+The afinn and bing lexicons indicated strong negative sentiment.   
+
+**afinn:** 
+```{r, eval=T, echo=F}
+
+knitr::kable(summary_afinn, format="html", align = "cc")
+
+```
+.      
+.      
+.      
+**bing:** 
+```{r, eval=T, echo=F}
+
+knitr::kable(summary_bing, format="html", align = "cc")
+
+```
+
+## nrc
+
+The nrc analysis indicated slight positivity over negativity, and trust was the most common sentiment expressed (but is this trust as in 'trust-in' or trust as in 'lack-of'?). Anger is notably well represented as well. >>>
+
+## nrc
+
+```{r, eval=T, echo=F}
+
+nrc_counts %>% 
+  mutate(sentiment = reorder(sentiment,n)) %>% 
+  ggplot(aes(n, sentiment)) + 
+  geom_col() +
+  labs(x = "NRC Sentiment", y = NULL) + 
+  theme_minimal()
+
+```
+
+## loughran
+
+Loughran is more in line with afinn + bing, with negative sentiment winning out by a large margin. 
+
+```{r, eval=T, echo=F}
+
+loughran_counts %>% 
+  mutate(sentiment = reorder(sentiment,n)) %>% 
+  ggplot(aes(n, sentiment)) + 
+  geom_col() +
+  labs(x = "Loughran Sentiment", y = NULL) + 
+  theme_minimal()
+
+```
+
+## Sample tweets
+
+For context, here are a few trandomly selected tweets:
+
+" Republicans are fighting to reopen schools, including superintendent Catherine Truitt. The Democrats led by Roy Cooper keep fighting to keep the schoolhouse door locked. #ncgov #ncpol #nced https://t.co/pCmfbCwcHl "
+
+" @SenatorClark Cumberland Co., NC students have not had in-person instruction for 1 YEAR!  Devastating impacts on our children.  We cannot afford to move into year 2 of limited or no in-school. No effort should be spared to keep schools open, or prioritize them in reopening plans "
+
+" "Not to worry! HB 112 does everything SB 37 did but follows 
+@ncdhhs and @CDCgov safety guidelines. Let's get kids back to school. It's time to put partisan politics aside and focus on what is best for NC children and families. Let's have a vote on HB 112. #ncpol https://t.co/kqgVLxw7nK "
+
+## Sample tweets
+
+" @RepDanBishop @NC_Governor @SenatorBerger @NCHouseSpeaker Governor Cooper's statement on Senate Bill 37: 'The question on SB 37 that I vetoed is not whether our children should be in the classroom in person. They absolutely should. The question is whether we do it safely.' " 
+
+" North Carolinians agree with @NC_Governor. SB-37 is bad policy as written and goes against the public's wishes. #ncpol https://t.co/xPkaEL5BMz "
+
+## Conclusions
+
+* This analysis doesn't offer a lot of nuance. My guess, for example, is that people are unhappy for different reasons: 
+  + some of the negative sentiment accounted for here is probably from folks who are unhappy that schools are reopening
+  + on the flip side, some of the negativity is also probably from people who are upset that there is that pushback against reopening schools
+* tl;dr -- people aren't very happy about the whole thing on all fronts
+
+## Limitations + opportunities
+
+* My keyword searches probably didn't catch the whole conversation 
+  + Additionally:  Twitter is far from the beginning and end of any conversation!
+* I could perhaps expand on what is presented here by broadening my keyword searches to catch some of the particulars of Covid-19 safety concerns in public schools as a general topic of interest and then somehow dive into what parents + teachers unions like NCAE are saying about all of this 
+* And/or I could compare the conversation happening here in NC to that of other states...or look at the US vs. other countries. 
+
+
+
+
