@@ -10,5 +10,5 @@ Uses the following lexicons:
 * nrc (https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm)
 * loughran (https://sraf.nd.edu/textual-analysis/resources/)
 
-[view presentation](https://cullerth.github.io/wk_7_indpndnt_analysis/week_7_presentation.html)
+[view presentation](https://cullerth.github.io/wk_7_indpndnt_analysis/wk_7_presentation.html)
 
